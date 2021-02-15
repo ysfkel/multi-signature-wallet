@@ -13,7 +13,7 @@ contract MultiSig{
     enum Authorization {
         NONE,
         OWNER,
-        SUSPENDED
+        DEACTIVATED
     }
 
     struct Transaction {
@@ -54,10 +54,16 @@ contract MultiSig{
           emit NewOwnerAdded(newOwner);
     }
 
-      function suspendOwner(address addr) isAdmin external {
+     function deactivateOwner(address addr) isAdmin external {
           require(addr != address(0), "invalid address");
-          owners[addr] = Authorization.SUSPENDED;
-      }
+          owners[addr] = Authorization.DEACTIVATED;
+     }
+     
+     function activateOwner(address addr) isAdmin external {
+          require(addr != address(0), "invalid address");
+          owners[addr] = Authorization.OWNER;
+     }
+     
 
     function createTransfer(uint amount, address payable to) isValidOwner external {
 
@@ -80,18 +86,25 @@ contract MultiSig{
         return _pendingTransactions;
     }
 
+    function getTransactionSignatureCount(uint transactionId) external view returns(uint) {
+        require(transactions[transactionId].to != address(0), "transaction does not exist");
+        return transactions[transactionId].signatureCount;
+    }
+
     function signTransation(uint id) isValidOwner external {
             require(transactions[id].to != address(0), "transaction does not exist");
             require(transactions[id].createdBy != msg.sender,"transaction creator cannot sign transaction");
             require(signatures[id][msg.sender] == false, "cannot sign transaction more than once");
-
+            
+            Transaction storage transaction = transactions[id];
             signatures[id][msg.sender] = true;
+            transaction.signatureCount++; 
             emit TransactionSigned(id, msg.sender);
     }
 
     function executeTransaction(uint id) isValidOwner external {
          require(transactions[id].to != address(0), "transaction does not exist");
-         require(transactions[id].completed != false, "transactions has already been completed");
+         require(transactions[id].completed == false, "transactions has already been completed");
          require(transactions[id].signatureCount >= quorum, "transaction requires more signatures");
          require(address(this).balance >= transactions[id].amount, "insufficient balance");
 
@@ -112,7 +125,7 @@ contract MultiSig{
     }
 
     modifier isValidOwner() {
-        require(owners[msg.sender] == Authorization.OWNER);
+        require(owners[msg.sender] == Authorization.OWNER, "you must have owner authorization to create transaction");
         _;
     }
 }
