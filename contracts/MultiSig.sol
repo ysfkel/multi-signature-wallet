@@ -67,6 +67,8 @@ contract MultiSig{
 
     function createTransfer(uint amount, address payable to) isValidOwner external {
 
+        require(to != address(0), "invalid address");
+
         nextTransactionId++;  
          
         transactions[nextTransactionId]= Transaction({
