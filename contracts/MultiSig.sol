@@ -10,6 +10,12 @@ contract MultiSig{
 
     uint[] private _pendingTransactions;
 
+    enum Authorization {
+        NONE,
+        OWNER,
+        SUSPENDED
+    }
+
     struct Transaction {
         uint id; 
         uint amount;
@@ -19,7 +25,7 @@ contract MultiSig{
         bool completed;
     }
 
-    mapping(address => bool) private owners;
+    mapping(address => Authorization) private owners;
 
     mapping(uint => Transaction) transactions;
 
@@ -29,19 +35,29 @@ contract MultiSig{
     event TransactionCompleted(uint transactionId, address to, uint amount, address createdBy, address executedBy);
     event TransactionSigned(uint transactionId, address signer);
     event NewOwnerAdded(address newOwner);
+    event FundsDeposited(address from, uint amount);
 
     constructor() 
       payable {
           _admin = msg.sender;
-          owners[msg.sender] = true;
+          owners[msg.sender] = Authorization.OWNER;
+    }
+
+    receive() external payable{
+         emit FundsDeposited(msg.sender, msg.value);
     }
 
     function addOwner(address newOwner) isAdmin external {
           require(newOwner != address(0), "invalid address");
-          require(owners[newOwner] == false, "address already an owner");
-          owners[newOwner] = true;
+          require(owners[newOwner] == Authorization.NONE, "address already an owner");
+          owners[newOwner] = Authorization.OWNER;
           emit NewOwnerAdded(newOwner);
     }
+
+      function suspendOwner(address addr) isAdmin external {
+          require(addr != address(0), "invalid address");
+          owners[addr] = Authorization.SUSPENDED;
+      }
 
     function createTransfer(uint amount, address payable to) isValidOwner external {
 
@@ -58,6 +74,10 @@ contract MultiSig{
 
         _pendingTransactions.push(nextTransactionId);
         emit TransactionCreated(nextTransactionId, msg.sender, to, amount);
+    }
+
+    function getPendingTransactions() external view returns(uint[] memory){
+        return _pendingTransactions;
     }
 
     function signTransation(uint id) isValidOwner external {
@@ -82,13 +102,17 @@ contract MultiSig{
         emit TransactionCompleted(id, to, amount, transactions[id].createdBy, msg.sender);
     }
 
+    function getBalance() external view returns(uint) {
+        return address(this).balance;
+    }
+
     modifier isAdmin() {
         require(_admin == msg.sender);
         _;
     }
 
     modifier isValidOwner() {
-        require(owners[msg.sender] == true);
+        require(owners[msg.sender] == Authorization.OWNER);
         _;
     }
 }
